@@ -1,0 +1,171 @@
+REM ****************************************************************************
+REM ** CN5FLBKP - Backup de arquivos                                09/08/2021 *
+REM ** Objetivo - Realizar o backup do arquivo informado                       *
+REM ** ------------------------------ Parametros ----------------------------- *
+REM **         #1 - FileInPath  - Caminho do arquivo de entrada                *
+REM **         #2 - FileOutPath - Caminho do arquivo de saida                  *
+REM **         #3 - FileName    - Nome do arquivo sem extensao                 *
+REM **         #4 - FileExt     - Extensao do arquivo (@ para sem extensao)    *
+REM **         #5 - BackupMode  - 'S' ou 'N' (S concatena a data atual)        *
+REM **         #6 - MaxBackup   - Quantidade de arquivos historicos (0 = inf.) *
+REM ****************************************************************************
+@echo off
+
+SET FILEINPATH=%1
+SET FILEOUTPATH=%2
+SET FILENAME=%3
+SET FILEEXT=%4
+SET BACKUPMODE=%5
+SET MAXBACKUP=%6
+SET FILEINNAME=
+SET FILEOUTNAME=
+SET BACKUPOUTFILE=
+SET DELETEBKPFILE=
+
+CALL :VALIDAPARAMS
+
+SET RETCODE=%ERRORLEVEL%
+IF NOT %RETCODE% EQU 0 EXIT /B %RETCODE%
+
+CALL :PARAMETERSADJ
+
+@echo on
+
+IF NOT "%DELETEBKPFILE%" EQU "" (
+   DEL "%FILEOUTPATH%%DELETEBKPFILE%"
+)
+
+IF NOT "%BACKUPOUTFILE%" EQU "" (
+   COPY "%FILEOUTPATH%%FILEOUTNAME%" "%FILEOUTPATH%%BACKUPOUTFILE%" /y
+)
+
+COPY "%FILEINPATH%%FILEINNAME%" "%FILEOUTPATH%%FILEOUTNAME%" /y
+
+EXIT /B %ERRORLEVEL%
+
+REM ****************************************************************************
+REM ** SUBROTINA - VALIDAPARAMS                                              ***
+REM ** FUNCAO    - VALIDAR PARAMETROS DE ENTRADA                             ***
+REM ****************************************************************************
+
+:VALIDAPARAMS
+
+IF "%FILEINPATH%"  EQU "" (
+   ECHO FILEINPATH NAO PODE ESTAR VAZIO 
+   EXIT /B 1
+)
+
+IF "%FILEOUTPATH%" EQU "" (
+   ECHO FILEOUTPATH NAO PODE ESTAR VAZIO 
+   EXIT /B 1
+)
+
+CALL :UNQUOTESTRING %FILENAME%
+IF "%RET_STRING%"  EQU "" (
+   ECHO FILENAME NAO PODE ESTAR VAZIO 
+   EXIT /B 1
+)
+
+IF NOT "%BACKUPMODE%" EQU "N" IF NOT "%BACKUPMODE%" EQU "S" (
+   ECHO BACKUP MODE DEVE SER 'S' OU 'N'
+   EXIT /B 1
+)
+
+EXIT /B 0
+
+REM ****************************************************************************
+REM ** SUBROTINA - PARAMETERSADJ                                             ***
+REM ** FUNCAO    - AJUSTAR PARAMETROS DE ENTRADA                             ***
+REM ****************************************************************************
+
+:PARAMETERSADJ
+
+CALL :UNQUOTESTRING %FILEINPATH%
+SET FILEINPATH=%RET_STRING%
+
+CALL :UNQUOTESTRING %FILEOUTPATH%
+SET FILEOUTPATH=%RET_STRING%
+
+CALL :UNQUOTESTRING %FILENAME%
+SET FILENAME=%RET_STRING%
+
+IF "%FILEEXT%" EQU "@" (
+   SET FILEEXT=
+)ELSE (
+   IF NOT "%FILEEXT:~0,1%" EQU "." SET FILEEXT=.%FILEEXT%
+)
+
+SET FILEINNAME=%FILENAME%%FILEEXT%
+
+IF NOT "%FILEINPATH:~-1%" EQU "/" (
+   IF NOT "%FILEINPATH:~-1%" EQU "\" SET FILEINPATH=%FILEINPATH%\
+)
+
+IF NOT "%FILEOUTPATH:~-1%" EQU "/" (
+   IF NOT "%FILEOUTPATH:~-1%" EQU "\" SET FILEOUTPATH=%FILEOUTPATH%\
+)
+
+SET DT=%DATE:~6,4%-%DATE:~3,2%-%DATE:~0,2%
+
+SET HH=%TIME:~0,2%
+IF "%TIME:~0,1%"==" " SET HH=0%HH:~1,1%
+
+SET HORA=%HH%
+SET HORA=%HORA%%TIME:~3,2%
+SET HORA=%HORA%%TIME:~6,2%
+
+IF "%BACKUPMODE%" EQU "S" (
+      SET FILEOUTNAME=%FILENAME%_%DT%A%FILEEXT%
+)ELSE SET FILEOUTNAME=%FILENAME%%FILEEXT%
+
+IF "%BACKUPMODE%" EQU "S" IF EXIST "%FILEOUTPATH%%FILEOUTNAME%" (
+   SET BACKUPOUTFILE=%FILENAME%_%DT%_%HORA%%FILEEXT%
+)
+
+IF "%MAXBACKUP%" EQU "" SET MAXBACKUP=0
+
+IF "%BACKUPMODE%" EQU "S" IF %MAXBACKUP% GTR 0 (
+   SET COUNTER=0
+   FOR /F "DELIMS=" %%A IN ('DIR %FILEOUTPATH%%FILENAME%_*%FILEEXT% /B /O:-N /A:-D') DO CALL :ANALISEFILE %%A
+)
+
+EXIT /B 0
+
+REM ****************************************************************************
+REM ** SUBROTINA - ANALISEFILE                                               ***
+REM ** FUNCAO    - SUBROTINA UTILIZADA NO FLUXO FOR DA ROTINA PARAMETERSADJ  ***
+REM ****************************************************************************
+
+:ANALISEFILE
+
+SET FILE=%*
+
+IF "%FILE%" EQU "" EXIT /B 0
+
+SET /A COUNTER=COUNTER+1
+
+IF %COUNTER% EQU %MAXBACKUP% SET DELETEBKPFILE=%FILE%
+
+EXIT /B 0
+
+REM ****************************************************************************
+REM ** SUBROTINA - UNQUOTESTRING                                             ***
+REM ** FUNCAO    - RETIRAR ASPAS DUPLAS DA STRING DE ENTRADA                 ***
+REM ****************************************************************************
+
+:UNQUOTESTRING
+
+SET STRING=%*
+SET RET_STRING=%STRING%
+
+SET FIRSTCHAR=%STRING:~0,1%
+SET LASTCHAR=%STRING:~-1%
+
+SET FIRSTCHAR=%FIRSTCHAR:"=+%
+SET LASTCHAR=%LASTCHAR:"=+%
+
+IF "%FIRSTCHAR%" EQU "+" IF "%LASTCHAR%" EQU "+" (
+   SET RET_STRING=%RET_STRING:~1,-1%
+)
+
+EXIT /B 0
